@@ -38,8 +38,8 @@ class TestFlaskBoto3Resources(TestCase):
         with self.app.app_context():
             assert isinstance(b.connections, dict)
             assert len(b.connections) == 2
-            assert isinstance(stack.top.boto3_cns, dict)
-            assert len(stack.top.boto3_cns) == 2
+            assert isinstance(g.boto3_cns, dict)
+            assert len(g.boto3_cns) == 2
 
     def test_002_instantiate_connectors(self, mock_resource):
         self.app.config['BOTO3_SERVICES'] = ['s3', 'sqs', 'dynamodb']
@@ -120,8 +120,8 @@ class TestFlaskBoto3Clients(TestCase):
         with self.app.app_context():
             assert isinstance(b.connections, dict)
             assert len(b.connections) == 2
-            assert isinstance(stack.top.boto3_cns, dict)
-            assert len(stack.top.boto3_cns) == 2
+            assert isinstance(g.boto3_cns, dict)
+            assert len(g.boto3_cns) == 2
 
     def test_002_instantiate_connectors(self, mock_client):
         self.app.config['BOTO3_SERVICES'] = ['codebuild', 'codedeploy']

@@ -1,7 +1,6 @@
 import boto3
 from botocore.exceptions import UnknownServiceError
-from flask import _app_ctx_stack as stack
-from flask import current_app
+from flask import current_app, g
 
 
 class Boto3(object):
@@ -21,7 +20,8 @@ class Boto3(object):
         app.teardown_appcontext(self.teardown)
 
     def connect(self):
-        """Iterate through the application configuration and instantiate
+        """
+        Iterate through the application configuration and instantiate
         the services.
         """
         requested_services = set(
@@ -69,12 +69,11 @@ class Boto3(object):
         return cns
 
     def teardown(self, exception):
-        ctx = stack.top
-        if hasattr(ctx, 'boto3_cns'):
-            for c in ctx.boto3_cns:
-                con = ctx.boto3_cns[c]
+        if hasattr(g, 'boto3_cns'):
+            for c in g.boto3_cns:
+                con = g.boto3_cns[c]
                 if hasattr(con, 'close') and callable(con.close):
-                    ctx.boto3_cns[c].close()
+                    g.boto3_cns[c].close()
 
     @property
     def resources(self):
@@ -96,8 +95,6 @@ class Boto3(object):
 
     @property
     def connections(self):
-        ctx = stack.top
-        if ctx is not None:
-            if not hasattr(ctx, 'boto3_cns'):
-                ctx.boto3_cns = self.connect()
-            return ctx.boto3_cns
+        if not hasattr(g, 'boto3_cns'):
+            g.boto3_cns = self.connect()
+        return g.boto3_cns
