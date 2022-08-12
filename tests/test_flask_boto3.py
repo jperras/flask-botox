@@ -6,157 +6,124 @@ import os, sys
 # with `python -m pytest` (which effectively does the sys.path add).
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
-
-from unittest import TestCase
-from mock import patch
+import pytest
 
 from flask import Flask, g
 from flask_boto3 import Boto3
 
 
-@patch('boto3.session.Session.resource')
-class TestFlaskBoto3Resources(TestCase):
+@pytest.fixture(scope="function")
+def app():
+    """Flask application object."""
 
-    def setUp(self):
-        self.app = Flask('unit_tests')
-        self.app.config['BOTO3_REGION'] = 'eu-west-1'
+    application = Flask("testing")
+    application.config["BOTO3_REGION"] = "us-east-1"
+    return application
 
-    def test_001_populate_application_context(self, mock_resource):
-        self.app.config['BOTO3_SERVICES'] = ['s3', 'sqs']
-        b = Boto3(self.app)
-        with self.app.app_context():
-            assert isinstance(b.connections, dict)
-            assert len(b.connections) == 2
-            assert isinstance(g.boto3_cns, dict)
-            assert len(g.boto3_cns) == 2
 
-    def test_002_instantiate_connectors(self, mock_resource):
-        self.app.config['BOTO3_SERVICES'] = ['s3', 'sqs', 'dynamodb']
-        b = Boto3(self.app)
-        with self.app.app_context():
-            b.connections
-            assert mock_resource.call_count == 3
-            assert sorted([i[0][0] for i in mock_resource.call_args_list]) == \
-                   sorted(self.app.config['BOTO3_SERVICES'])
+@pytest.fixture(scope="function")
+def ext(app):
+    """Extension under test."""
 
-    def test_003_pass_credentials_through_app_conf(self, mock_resource):
-        self.app.config['BOTO3_SERVICES'] = ['s3']
-        b = Boto3(self.app)
-        with self.app.app_context():
-            b.connections
-            mock_resource.assert_called_once_with(
-                's3',
-                aws_access_key_id=None,
-                aws_secret_access_key=None,
-                region_name='eu-west-1'
-            )
+    return Boto3(app)
 
-    def test_004_pass_optional_params_through_conf(self, mock_resource):
-        self.app.config['BOTO3_SERVICES'] = ['dynamodb']
-        self.app.config['BOTO3_OPTIONAL_PARAMS'] = {
-            'dynamodb': {
-                'args': ('eu-west-1'),
-                'kwargs': {
-                    'fake_param': 'fake_value'
-                }
-            }
+
+def test_populate_application_context(app, ext, mocker):
+    app.config["BOTO3_SERVICES"] = ["s3", "sqs"]
+
+    with app.app_context():
+        assert isinstance(ext.connections, dict)
+        assert len(ext.connections) == 2
+        assert isinstance(g.boto3_cns, dict)
+        assert len(g.boto3_cns) == 2
+
+
+def test_instantiate_resource_connectors(app, ext, mocker):
+    app.config["BOTO3_SERVICES"] = ["s3", "sqs", "dynamodb"]
+    mocked_resource = mocker.patch("boto3.session.Session.resource", autospec=True)
+    with app.app_context():
+        ext.connections
+        assert mocked_resource.call_count == 3
+        assert sorted([i[0][1] for i in mocked_resource.call_args_list]) == sorted(
+            app.config["BOTO3_SERVICES"]
+        )
+
+
+def test_pass_optional_params_through_conf_for_resources(app, ext, mocker):
+    app.config["BOTO3_SERVICES"] = ["dynamodb"]
+    app.config["BOTO3_OPTIONAL_PARAMS"] = {
+        "dynamodb": {"args": ("eu-west-1"), "kwargs": {"use_ssl": True}}
+    }
+    mocked_resource = mocker.patch("boto3.session.Session.resource", autospec=True)
+    with app.app_context():
+        ext.connections
+        mocked_resource.assert_called_once_with(
+            mocker.ANY,  # Internal Session object
+            "dynamodb",
+            "eu-west-1",
+            aws_access_key_id=None,
+            aws_secret_access_key=None,
+            use_ssl=True,
+        )
+
+
+def test_check_boto_clients_are_available(app, ext):
+    app.config["BOTO3_SERVICES"] = ["s3", "sqs", "codedeploy", "codebuild"]
+    with app.app_context():
+        clients = ext.clients
+        assert len(clients) == len(app.config["BOTO3_SERVICES"])
+
+
+def test_populate_resources_application_context(app, ext):
+    app.config["BOTO3_SERVICES"] = ["codebuild", "codedeploy"]
+    with app.app_context():
+        assert isinstance(ext.connections, dict)
+        assert len(ext.connections) == 2
+        assert isinstance(g.boto3_cns, dict)
+        assert len(g.boto3_cns) == 2
+
+
+def test_instantiate_client_connectors(app, ext, mocker):
+    app.config["BOTO3_SERVICES"] = ["codebuild", "codedeploy"]
+    mocked_client = mocker.patch("boto3.session.Session.client")
+    with app.app_context():
+        ext.connections
+        assert mocked_client.call_count == 2
+        assert sorted([i[0][0] for i in mocked_client.call_args_list]) == sorted(
+            app.config["BOTO3_SERVICES"]
+        )
+
+
+def test_pass_optional_params_through_conf_for_clients(app, ext, mocker):
+    app.config["BOTO3_SERVICES"] = ["codepipeline"]
+    app.config["BOTO3_OPTIONAL_PARAMS"] = {
+        "codepipeline": {
+            "args": ("eu-west-1"),
+            "kwargs": {"use_ssl": True},
         }
-        b = Boto3(self.app)
-        with self.app.app_context():
-            b.connections
-            mock_resource.assert_called_once_with(
-                'dynamodb',
-                'eu-west-1',
-                aws_access_key_id=None,
-                aws_secret_access_key=None,
-                fake_param='fake_value'
-            )
-
-    def test_005_check_boto_clients_are_available(self, mock_resource):
-        self.app.config['BOTO3_SERVICES'] = ['s3', 'sqs']
-        b = Boto3(self.app)
-        with self.app.app_context():
-            clients = b.clients
-            assert len(clients) == len(self.app.config['BOTO3_SERVICES'])
-            print(clients)
-
-    def test_006_check_boto_resources_are_available(self, mock_resource):
-        self.app.config['BOTO3_SERVICES'] = ['s3', 'sqs']
-        b = Boto3(self.app)
-        with self.app.app_context():
-            resources = b.resources
-            assert len(resources) == len(self.app.config['BOTO3_SERVICES'])
-            print(resources)
+    }
+    mocked_client = mocker.patch("boto3.session.Session.client")
+    with app.app_context():
+        ext.connections
+        mocked_client.assert_called_once_with(
+            "codepipeline",
+            "eu-west-1",
+            aws_access_key_id=None,
+            aws_secret_access_key=None,
+            use_ssl=True,
+        )
 
 
-@patch('boto3.session.Session.client')
-class TestFlaskBoto3Clients(TestCase):
+def test_check_boto_resources_are_available(app, ext):
+    """Ensure that clients/resources are split correctly.
 
-    def setUp(self):
-        self.app = Flask('unit_tests')
-        self.app.config['BOTO3_REGION'] = 'eu-west-1'
+    SQS has a client, but codedeploy/codebuild are resource-only (but they still
+    have clients).
+    """
 
-    def test_001_populate_application_context(self, mock_client):
-        self.app.config['BOTO3_SERVICES'] = ['codebuild', 'codedeploy']
-        b = Boto3(self.app)
-        with self.app.app_context():
-            assert isinstance(b.connections, dict)
-            assert len(b.connections) == 2
-            assert isinstance(g.boto3_cns, dict)
-            assert len(g.boto3_cns) == 2
-
-    def test_002_instantiate_connectors(self, mock_client):
-        self.app.config['BOTO3_SERVICES'] = ['codebuild', 'codedeploy']
-        b = Boto3(self.app)
-        with self.app.app_context():
-            b.connections
-            assert mock_client.call_count == 2
-            assert sorted([i[0][0] for i in mock_client.call_args_list]) == \
-                   sorted(self.app.config['BOTO3_SERVICES'])
-
-    def test_003_pass_credentials_through_app_conf(self, mock_client):
-        self.app.config['BOTO3_SERVICES'] = ['codepipeline']
-        b = Boto3(self.app)
-        with self.app.app_context():
-            b.connections
-            mock_client.assert_called_once_with(
-                'codepipeline',
-                aws_access_key_id=None,
-                aws_secret_access_key=None,
-                region_name='eu-west-1'
-            )
-
-    def test_004_pass_optional_params_through_conf(self, mock_client):
-        self.app.config['BOTO3_SERVICES'] = ['codepipeline']
-        self.app.config['BOTO3_OPTIONAL_PARAMS'] = {
-            'codepipeline': {
-                'args': ('eu-west-1'),
-                'kwargs': {
-                    'fake_param': 'fake_value'
-                }
-            }
-        }
-        b = Boto3(self.app)
-        with self.app.app_context():
-            b.connections
-            mock_client.assert_called_once_with(
-                'codepipeline',
-                'eu-west-1',
-                aws_access_key_id=None,
-                aws_secret_access_key=None,
-                fake_param='fake_value'
-            )
-
-    def test_005_check_boto_clients_are_available(self, mock_client):
-        self.app.config['BOTO3_SERVICES'] = ['codedeploy', 'codebuild']
-        b = Boto3(self.app)
-        with self.app.app_context():
-            clients = b.clients
-            assert len(clients) == len(self.app.config['BOTO3_SERVICES'])
-
-    def test_006_check_boto_resources_are_available(self, mock_client):
-        self.app.config['BOTO3_SERVICES'] = ['codedeploy', 'codebuild']
-        b = Boto3(self.app)
-        with self.app.app_context():
-            resources = b.resources
-            assert len(resources) == len(self.app.config['BOTO3_SERVICES'])
+    app.config["BOTO3_SERVICES"] = ["sqs", "codedeploy", "codebuild"]
+    with app.app_context():
+        resources = ext.resources
+        clients = ext.clients
+        assert len(resources) == 1
+        assert len(clients) == len(app.config["BOTO3_SERVICES"])
