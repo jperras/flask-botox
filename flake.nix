@@ -49,6 +49,8 @@
             poetry # Python package manager
             pkgs.nodePackages.pyright # Language server
             nixpkgs-fmt # For formatting nix files
+            black
+            black-macchiato
           ];
         };
       }));
