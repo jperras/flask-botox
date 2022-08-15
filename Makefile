@@ -10,8 +10,4 @@ clean:
 .PHONY: test
 test:
 	mkdir -p ${TEST_RESULTS_FOLDER}
-	pipenv run py.test --junitxml=${TEST_RESULTS_FOLDER}/xunit.xml --cov=flask_boto3 --cov-report html:${TEST_RESULTS_FOLDER}/html
-
-.PHONY: bandit
-bandit:
-	pipenv run bandit -r flask_boto3/
+	poetry run pytest --junitxml=${TEST_RESULTS_FOLDER}/xunit.xml --cov=flask_boto3 --cov-report html:${TEST_RESULTS_FOLDER}/html
