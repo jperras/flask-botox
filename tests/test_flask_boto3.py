@@ -7,6 +7,7 @@ import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 import pytest
+import types
 
 from flask import Flask, g
 from flask_boto3 import Boto3
@@ -28,14 +29,14 @@ def ext(app):
     return Boto3(app)
 
 
-def test_populate_application_context(app, ext, mocker):
+def test_populate_application_context(app, ext):
     app.config["BOTO3_SERVICES"] = ["s3", "sqs"]
 
     with app.app_context():
         assert isinstance(ext.connections, dict)
         assert len(ext.connections) == 2
-        assert isinstance(g.boto3_cns, dict)
-        assert len(g.boto3_cns) == 2
+        assert isinstance(g._boto3, types.SimpleNamespace)
+        assert len(g._boto3.connections) == 2
 
 
 def test_instantiate_resource_connectors(app, ext, mocker):
@@ -79,8 +80,8 @@ def test_populate_resources_application_context(app, ext):
     with app.app_context():
         assert isinstance(ext.connections, dict)
         assert len(ext.connections) == 2
-        assert isinstance(g.boto3_cns, dict)
-        assert len(g.boto3_cns) == 2
+        assert isinstance(g._boto3, types.SimpleNamespace)
+        assert len(g._boto3.connections) == 2
 
 
 def test_instantiate_client_connectors(app, ext, mocker):

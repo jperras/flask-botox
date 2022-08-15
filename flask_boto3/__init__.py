@@ -1,13 +1,15 @@
+from types import SimpleNamespace
 import boto3
 from botocore.exceptions import UnknownServiceError
 from flask import current_app, g
 
 
 class Boto3(object):
-    """Stores a bunch of boto3 conectors inside Flask's application context
-    for easier handling inside view functions.
+    """
+    Stores boto3 conectors inside Flask's application context for threadsafe
+    usage.
 
-    All connectors are stored inside the dict `boto3_cns` where the keys are
+    All connectors are stored inside the SimpleNamespace `_boto3` where the keys are
     the name of the services and the values their associated boto3 client.
     """
 
@@ -17,12 +19,20 @@ class Boto3(object):
             self.init_app(app)
 
     def init_app(self, app):
+        """
+        Initialize the extension namespace & register teardown function.
+
+        Parameters:
+
+            app: The ``Flask`` application object that we are initializing
+                 this extension against.
+        """
         app.teardown_appcontext(self.teardown)
 
-    def connect(self):
+    def connect(self) -> dict:
         """
-        Iterate through the application configuration and instantiate
-        the services.
+        Iterate through the application configuration and instantiate the
+        services.
         """
         requested_services = set(
             svc.lower() for svc in current_app.config.get('BOTO3_SERVICES', [])
@@ -69,11 +79,13 @@ class Boto3(object):
         return cns
 
     def teardown(self, exception):
-        if hasattr(g, 'boto3_cns'):
-            for c in g.boto3_cns:
-                con = g.boto3_cns[c]
-                if hasattr(con, 'close') and callable(con.close):
-                    g.boto3_cns[c].close()
+        """
+        Clean up extensions by closing connections and removing namespace.
+        """
+        if hasattr(g, '_boto3'):
+            for name, conn in g._boto3.connections.items():
+                if hasattr(conn, 'close') and callable(conn.close):
+                    g._boto3.connections[name].close()
 
     @property
     def resources(self):
@@ -95,6 +107,6 @@ class Boto3(object):
 
     @property
     def connections(self):
-        if not hasattr(g, 'boto3_cns'):
-            g.boto3_cns = self.connect()
-        return g.boto3_cns
+        if not hasattr(g, '_boto3'):
+            g._boto3 = SimpleNamespace(connections=self.connect())
+        return g._boto3.connections
