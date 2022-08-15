@@ -26,7 +26,8 @@ def app():
 def ext(app):
     """Extension under test."""
 
-    return Boto3(app)
+    with app.app_context():
+        yield Boto3(app)
 
 
 def test_populate_application_context(app, ext):
