@@ -1,5 +1,5 @@
 {
-  description = "Nix flake for flask-boto3";
+  description = "Nix flake for flask-botox";
 
   inputs.flake-utils.url = "github:numtide/flake-utils";
   inputs.nixpkgs.url = "github:NixOS/nixpkgs";
@@ -19,7 +19,7 @@
           # The environment
           env = prev.poetry2nix.mkPoetryEnv {
             projectDir = ./.;
-            editablePackageSources = { flask-boto3-app = ./flask_boto3; };
+            editablePackageSources = { flask-botox-app = ./flask_botox; };
             python = prev.python3;
           };
         })
@@ -39,7 +39,7 @@
         defaultApp = pkgs.myapp;
 
         devShell = pkgs.mkShell {
-          name = "flask-boto3";
+          name = "flask-botox";
           # Add anything in here if you want it to run when we run `nix develop`.
           shellHook = "";
 

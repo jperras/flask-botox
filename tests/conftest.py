@@ -9,7 +9,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 import pytest
 
 from flask import Flask
-from flask_boto3 import Boto3
+from flask_botox import Boto3
 
 
 @pytest.fixture(scope="function")
@@ -17,7 +17,7 @@ def app():
     """Flask application object."""
 
     application = Flask("testing")
-    application.config["BOTO3_REGION"] = "us-east-1"
+    application.config["AWS_DEFAULT_REGION"] = "us-east-1"
     return application
 
 

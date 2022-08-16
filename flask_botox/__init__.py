@@ -36,24 +36,25 @@ class Boto3(object):
             app: The ``Flask`` application object that we are initializing
                  this extension against.
         """
-        g._boto3 = SimpleNamespace(connections={})
         app.teardown_appcontext(self.teardown)
 
     def connect(self) -> dict:
         """
         Iterate through the application configuration and instantiate the
         services.
+
+        Returns:
+            A ``dict`` of all the connections, indexed by their name, e.g. ``s3``.
         """
         requested_services = set(
-            service.lower() for service in current_app.config.get("BOTO3_SERVICES", [])
+            service.lower() for service in current_app.config.get("BOTOX_SERVICES", [])
         )
 
-        region = current_app.config.get("BOTO3_REGION")
         sess_params = {
-            "aws_access_key_id": current_app.config.get("BOTO3_ACCESS_KEY"),
-            "aws_secret_access_key": current_app.config.get("BOTO3_SECRET_KEY"),
-            "profile_name": current_app.config.get("BOTO3_PROFILE"),
-            "region_name": region,
+            "aws_access_key_id": current_app.config.get("AWS_ACCESS_KEY_ID"),
+            "aws_secret_access_key": current_app.config.get("AWS_SECRET_ACCESS_KEY"),
+            "profile_name": current_app.config.get("AWS_PROFILE"),
+            "region_name": current_app.config.get("AWS_DEFAULT_REGION"),
         }
         sess = boto3.session.Session(**sess_params)
         cns = {}
@@ -61,7 +62,7 @@ class Boto3(object):
         for service in requested_services:
             # Check for optional parameters provided in configuration
             # dictionary for each service we are connecting.
-            params = current_app.config.get("BOTO3_OPTIONAL_PARAMS", {}).get(
+            params = current_app.config.get("BOTOX_OPTIONAL_PARAMS", {}).get(
                 service, {}
             )
 
@@ -80,7 +81,8 @@ class Boto3(object):
                 args = [args]
 
             # Create resource or client
-            # This may raise a boto3 ``UnknownServiceError``.
+            # This may raise a boto3 ``UnknownServiceError`` if a service name
+            # doesn't actually correspond to an available resource/client.
             if service in sess.get_available_resources():
                 cns.update({service: sess.resource(service, *args, **kwargs)})
             else:
